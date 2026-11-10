@@ -63,6 +63,7 @@ export const layers: Layer[] = [
 ];
 
 export const endpoints = [0, 3.5, 6, 9.5] as const;
+export const openingTime = 1.75;
 
 export function sceneSegment(time: number) {
   const segment = time < endpoints[1] ? 0 : time < endpoints[2] ? 1 : 2;

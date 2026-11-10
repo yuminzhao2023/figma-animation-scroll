@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { endpoints, interpolate, layers, mix, sceneSegment } from './scene';
+import { endpoints, interpolate, layers, mix, openingTime, sceneSegment } from './scene';
 
 const galleryImages = [
   { src: '/assets/imgPhoto1.webp', thumb: '/assets/imgPhoto1-thumb.webp', label: 'Two hikers in a misty mountain pass', className: 'main left' },
@@ -8,154 +8,173 @@ const galleryImages = [
   { src: '/assets/imgPhoto2.webp', thumb: '/assets/imgPhoto2-thumb.webp', label: 'Mountain valley beneath the clouds', className: 'side right' },
 ];
 
-function bezier(t: number, x1: number, y1: number, x2: number, y2: number) {
-  let low = 0;
-  let high = 1;
-  let u = t;
-  for (let i = 0; i < 12; i += 1) {
-    u = (low + high) / 2;
-    const x = 3 * (1-u) * (1-u) * u * x1 + 3 * (1-u) * u * u * x2 + u * u * u;
-    if (x < t) low = u; else high = u;
-  }
-  return 3 * (1-u) * (1-u) * u * y1 + 3 * (1-u) * u * u * y2 + u * u * u;
-}
+type RenderElements = {
+  layers: Map<string, HTMLElement>;
+  panel: HTMLElement;
+  nav: HTMLElement;
+  scrollCue: HTMLElement;
+  info: HTMLElement;
+  cards: HTMLElement[];
+};
 
-function ease(t: number, destination: number) {
-  return destination === 3 ? bezier(t, 0, 0, 0.58, 1) : bezier(t, 0.42, 0, 0.58, 1);
+function setStyle(element: HTMLElement, property: 'transform' | 'opacity' | 'color' | 'visibility', value: string) {
+  if (element.style[property] !== value) element.style[property] = value;
 }
 
 function App() {
+  const journeyRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
-  const frameRef = useRef(0);
-  const timerRef = useRef<number | undefined>(undefined);
+  const elementsRef = useRef<RenderElements | null>(null);
   const noticeTimerRef = useRef<number | undefined>(undefined);
-  const timeRef = useRef(0);
-  const destinationRef = useRef(0);
+  const scrollRangeRef = useRef(1);
+  const galleryReadyRef = useRef(false);
+  const targetTimeRef = useRef(openingTime);
+  const renderedTimeRef = useRef(openingTime);
+  const frameRef = useRef(0);
+  const fallbackRef = useRef<number | undefined>(undefined);
+  const hasRenderedRef = useRef(false);
+  const scheduleFrameRef = useRef<() => void>(() => {});
   const reducedRef = useRef(false);
   const readyRef = useRef(false);
-  const lastInputRef = useRef(0);
-  const touchStartRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [galleryReady, setGalleryReady] = useState(false);
   const [currentState, setCurrentState] = useState(0);
   const [notice, setNotice] = useState('');
   const [selectedImage, setSelectedImage] = useState<(typeof galleryImages)[number] | null>(null);
 
   const renderFrame = useCallback((time: number) => {
-    const scene = sceneRef.current;
+    const elements = elementsRef.current;
     const gallery = galleryRef.current;
-    if (!scene || !gallery) return;
+    if (!elements || !gallery) return;
     for (const layer of layers) {
-      const element = scene.querySelector<HTMLElement>(`[data-layer="${layer.id}"]`);
+      const element = elements.layers.get(layer.id);
       if (!element) continue;
       const { rect, opacity } = interpolate(layer, time);
       const base = layer.svg ? layer.states[1].rect : layer.states[0].rect;
-      element.style.transform = `translate3d(${rect[0]-base[0]}px,${rect[1]-base[1]}px,0) scale(${rect[2]/base[2]},${rect[3]/base[3]})`;
-      element.style.opacity = `${opacity}`;
+      setStyle(element, 'transform', `translate3d(${rect[0]-base[0]}px,${rect[1]-base[1]}px,0) scale(${rect[2]/base[2]},${rect[3]/base[3]})`);
+      setStyle(element, 'opacity', `${opacity}`);
     }
 
     const { segment, fraction } = sceneSegment(time);
     const endProgress = segment === 2 ? fraction : 0;
-    const panel = scene.querySelector<HTMLElement>('.black-panel');
-    if (panel) {
-      panel.style.top = `${mix(930, 60, endProgress)}px`;
-      panel.style.height = `${mix(84, 870, endProgress)}px`;
-    }
+    const panelOverlap = 20 * (1 - endProgress);
+    setStyle(elements.panel, 'transform', `translate3d(0,${870 * (1 - endProgress) - panelOverlap}px,0) scaleY(${(mix(84, 870, endProgress) + panelOverlap) / 870})`);
 
-    const nav = scene.querySelector<HTMLElement>('.navigation');
-    if (nav) {
-      nav.style.opacity = `${Math.min(1, time / 3.5)}`;
-      nav.style.visibility = time > 0.05 ? 'visible' : 'hidden';
-      const white = time <= 3.5 ? 0 : time >= 6 ? 255 : Math.round(255 * ((time - 3.5) / 2.5));
-      nav.style.color = `rgb(${white},${white},${white})`;
-    }
+    const nav = elements.nav;
+    setStyle(nav, 'opacity', `${Math.min(1, time / 3.5)}`);
+    setStyle(nav, 'visibility', time > 0.05 ? 'visible' : 'hidden');
+    const white = time <= 3.5 ? 0 : time >= 6 ? 255 : Math.round(255 * ((time - 3.5) / 2.5));
+    setStyle(nav, 'color', `rgb(${white},${white},${white})`);
 
-    const scrollCue = scene.querySelector<HTMLElement>('.scroll-cue');
-    if (scrollCue) {
-      const y = time <= 3.5 ? mix(1234, 1234, time / 3.5) : time <= 6 ? mix(1234, 761, (time-3.5)/2.5) : mix(761, -39, (time-6)/3.5);
-      scrollCue.style.top = `${y}px`;
-      scrollCue.style.opacity = `${time < 3.5 ? 0 : time > 8.9 ? 0 : 1}`;
-    }
+    const scrollCue = elements.scrollCue;
+    const y = time <= 3.5 ? 1234 : time <= 6 ? mix(1234, 761, (time-3.5)/2.5) : mix(761, -39, (time-6)/3.5);
+    setStyle(scrollCue, 'transform', `translate3d(-50%,${y}px,0)`);
+    setStyle(scrollCue, 'opacity', `${time < 3.5 ? 0 : time > 8.9 ? 0 : 1}`);
 
-    gallery.style.setProperty('--gallery-progress', `${endProgress}`);
-    gallery.inert = time <= 9.45;
-    gallery.classList.toggle('is-interactive', time > 9.45);
-    const info = gallery.querySelector<HTMLElement>('.gallery-info');
-    if (info) {
-      info.style.top = `${mix(868, 115, endProgress)}px`;
-      info.style.opacity = `${endProgress}`;
+    if (window.innerWidth <= 800) gallery.style.setProperty('--gallery-progress', `${endProgress}`);
+    const shouldBeInert = time <= 9.45;
+    if (gallery.inert !== shouldBeInert) {
+      gallery.inert = shouldBeInert;
+      gallery.classList.toggle('is-interactive', !shouldBeInert);
     }
-    const cards = gallery.querySelectorAll<HTMLElement>('.gallery-card');
-    cards.forEach((card) => {
+    setStyle(elements.info, 'transform', `translate3d(0,${753 * (1 - endProgress)}px,0)`);
+    setStyle(elements.info, 'opacity', `${endProgress}`);
+    elements.cards.forEach((card) => {
       const side = card.classList.contains('side');
-      card.style.top = `${mix(side ? 910 : 868, side ? 416 : 374, endProgress)}px`;
-      card.style.opacity = `${endProgress * (side ? 0.6 : 1)}`;
+      setStyle(card, 'transform', `translate3d(0,${494 * (1 - endProgress)}px,0)`);
+      setStyle(card, 'opacity', `${endProgress * (side ? 0.6 : 1)}`);
     });
   }, []);
 
-  const goToRef = useRef<(index: number, autoNext?: boolean) => void>(() => {});
-
-  const goTo = useCallback((index: number, autoNext = false) => {
+  const syncScroll = useCallback(() => {
     if (!readyRef.current) return;
-    const next = Math.max(0, Math.min(3, index));
-    if (next >= 1) setGalleryReady(true);
-    window.cancelAnimationFrame(frameRef.current);
-    window.clearTimeout(timerRef.current);
-    destinationRef.current = next;
-    const from = timeRef.current;
-    const to = endpoints[next];
-
-    const finish = () => {
-      timeRef.current = to;
-      renderFrame(to);
-      setCurrentState(next);
-      if (autoNext && next === 2 && !reducedRef.current) {
-        timerRef.current = window.setTimeout(() => goToRef.current(3), 15);
+    const rawTime = Math.min(endpoints[3], openingTime + window.scrollY / scrollRangeRef.current * (endpoints[3] - openingTime));
+    let state = 0;
+    if (rawTime >= endpoints[1] - 0.01) {
+      state = 1;
+      for (let index = 2; index < endpoints.length; index += 1) {
+        if (Math.abs(endpoints[index] - rawTime) < Math.abs(endpoints[state] - rawTime)) state = index;
       }
-    };
-
-    if (reducedRef.current || Math.abs(to - from) < 0.001) {
-      finish();
-      return;
     }
-
-    const start = performance.now();
-    const duration = Math.abs(to - from) * 1000;
-    const step = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const time = mix(from, to, ease(progress, next));
-      timeRef.current = time;
+    const time = reducedRef.current ? (state === 0 ? openingTime : endpoints[state]) : rawTime;
+    targetTimeRef.current = time;
+    if (reducedRef.current || !hasRenderedRef.current) {
+      window.cancelAnimationFrame(frameRef.current);
+      window.clearTimeout(fallbackRef.current);
+      frameRef.current = 0;
+      hasRenderedRef.current = true;
       renderFrame(time);
-      if (progress < 1) frameRef.current = window.requestAnimationFrame(step);
-      else finish();
-    };
-    frameRef.current = window.requestAnimationFrame(step);
+      renderedTimeRef.current = time;
+    } else if (Math.abs(time - renderedTimeRef.current) > 0.0001) {
+      scheduleFrameRef.current();
+    }
+    if (rawTime > 5.5 && !galleryReadyRef.current) {
+      galleryReadyRef.current = true;
+      setGalleryReady(true);
+    }
+    setCurrentState(state);
   }, [renderFrame]);
-  goToRef.current = goTo;
+
+  const goTo = useCallback((index: number) => {
+    const next = Math.max(0, Math.min(3, index));
+    window.scrollTo({
+      top: scrollRangeRef.current * Math.max(0, endpoints[next] - openingTime) / (endpoints[3] - openingTime),
+      behavior: reducedRef.current ? 'instant' : 'smooth',
+    });
+  }, []);
 
   const replay = useCallback(() => {
-    window.cancelAnimationFrame(frameRef.current);
-    window.clearTimeout(timerRef.current);
-    timeRef.current = 0;
-    destinationRef.current = 0;
-    renderFrame(0);
-    setCurrentState(0);
     setSelectedImage(null);
-    if (!reducedRef.current) timerRef.current = window.setTimeout(() => goToRef.current(1), 400);
-  }, [renderFrame]);
+    goTo(0);
+  }, [goTo]);
 
   useEffect(() => {
+    const scene = sceneRef.current;
+    const gallery = galleryRef.current;
+    if (!scene || !gallery) return;
+    elementsRef.current = {
+      layers: new Map(Array.from(scene.querySelectorAll<HTMLElement>('[data-layer]'), (element) => [element.dataset.layer!, element])),
+      panel: scene.querySelector<HTMLElement>('.black-panel')!,
+      nav: scene.querySelector<HTMLElement>('.navigation')!,
+      scrollCue: scene.querySelector<HTMLElement>('.scroll-cue')!,
+      info: gallery.querySelector<HTMLElement>('.gallery-info')!,
+      cards: Array.from(gallery.querySelectorAll<HTMLElement>('.gallery-card')),
+    };
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     reducedRef.current = media.matches;
+    setReducedMotion(media.matches);
+    const flushFrame = () => {
+      window.clearTimeout(fallbackRef.current);
+      fallbackRef.current = undefined;
+      frameRef.current = 0;
+      renderFrame(targetTimeRef.current);
+      renderedTimeRef.current = targetTimeRef.current;
+    };
+    scheduleFrameRef.current = () => {
+      if (frameRef.current) return;
+      frameRef.current = window.requestAnimationFrame(flushFrame);
+      fallbackRef.current = window.setTimeout(() => {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = 0;
+        flushFrame();
+      }, 50);
+    };
     const onMotionChange = () => {
       reducedRef.current = media.matches;
-      if (media.matches && readyRef.current) goToRef.current(destinationRef.current);
+      setReducedMotion(media.matches);
+      syncScroll();
     };
     media.addEventListener('change', onMotionChange);
+    const onScroll = () => syncScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scrollend', onScroll);
     const updateScale = () => {
       const scale = Math.max(window.innerWidth / 1280, window.innerHeight / 832);
       document.documentElement.style.setProperty('--scene-scale', `${scale}`);
+      scrollRangeRef.current = Math.max(1, (journeyRef.current?.offsetHeight ?? window.innerHeight) - window.innerHeight);
+      onScroll();
     };
     updateScale();
     window.addEventListener('resize', updateScale);
@@ -166,6 +185,13 @@ function App() {
       '/assets/imgExplore.svg', '/assets/imgCave.webp', '/assets/imgExplorer.webp',
     ];
     let cancelled = false;
+    let galleryIdle: number | undefined;
+    let galleryFallback: number | undefined;
+    const prepareGallery = () => {
+      if (cancelled || galleryReadyRef.current) return;
+      galleryReadyRef.current = true;
+      setGalleryReady(true);
+    };
     Promise.all(keyAssets.map((src) => new Promise<void>((resolve) => {
       const img = new Image();
       img.onload = () => { img.decode?.().catch(() => {}).finally(resolve) ?? resolve(); };
@@ -175,72 +201,48 @@ function App() {
       if (cancelled) return;
       readyRef.current = true;
       setReady(true);
-      renderFrame(0);
-      if (import.meta.env.DEV) {
-        (window as Window & { __parallaxTestSeek?: (time: number) => void }).__parallaxTestSeek = (time: number) => {
-          window.cancelAnimationFrame(frameRef.current);
-          window.clearTimeout(timerRef.current);
-          timeRef.current = time;
-          renderFrame(time);
-        };
+      syncScroll();
+      if (typeof window.requestIdleCallback === 'function') {
+        galleryIdle = window.requestIdleCallback(prepareGallery, { timeout: 1200 });
+      } else {
+        galleryFallback = window.setTimeout(prepareGallery, 300);
       }
-      if (!reducedRef.current) timerRef.current = window.setTimeout(() => goToRef.current(1), 100);
     });
     return () => {
       cancelled = true;
+      elementsRef.current = null;
       readyRef.current = false;
-      delete (window as Window & { __parallaxTestSeek?: (time: number) => void }).__parallaxTestSeek;
+      hasRenderedRef.current = false;
       window.cancelAnimationFrame(frameRef.current);
-      window.clearTimeout(timerRef.current);
+      window.clearTimeout(fallbackRef.current);
+      frameRef.current = 0;
+      if (galleryIdle !== undefined) window.cancelIdleCallback(galleryIdle);
+      window.clearTimeout(galleryFallback);
       window.clearTimeout(noticeTimerRef.current);
       window.removeEventListener('resize', updateScale);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scrollend', onScroll);
       media.removeEventListener('change', onMotionChange);
     };
-  }, [renderFrame]);
+  }, [renderFrame, syncScroll]);
 
   useEffect(() => {
     if (!ready) return;
-    const advance = (direction: 1 | -1) => {
-      const now = performance.now();
-      if (now - lastInputRef.current < 250) return;
-      lastInputRef.current = now;
-      const destination = destinationRef.current;
-      if (direction > 0 && destination < 3) goTo(destination + 1, destination + 1 === 2);
-      if (direction < 0 && destination > 0) goTo(destination - 1);
-    };
-    const onWheel = (event: WheelEvent) => {
-      if (selectedImage) return;
-      event.preventDefault();
-      if (Math.abs(event.deltaY) > 7) advance(event.deltaY > 0 ? 1 : -1);
-    };
     const onKey = (event: KeyboardEvent) => {
       if (selectedImage) {
         if (event.key === 'Escape') setSelectedImage(null);
         return;
       }
       if (event.target instanceof HTMLElement && event.target.closest('button') && [' ', 'Enter'].includes(event.key)) return;
-      if (['ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) { event.preventDefault(); advance(1); }
-      if (['ArrowUp', 'PageUp', 'ArrowLeft', 'Backspace'].includes(event.key)) { event.preventDefault(); advance(-1); }
+      if (event.key === 'Enter') { event.preventDefault(); goTo(Math.min(3, currentState + 1)); }
+      if (event.key === 'Backspace' || event.key === 'ArrowLeft') { event.preventDefault(); window.scrollBy({ top: -window.innerHeight * 0.75, behavior: 'smooth' }); }
       if (event.key.toLowerCase() === 'r') replay();
     };
-    const onTouchStart = (event: TouchEvent) => { touchStartRef.current = event.touches[0]?.clientY ?? null; };
-    const onTouchEnd = (event: TouchEvent) => {
-      if (selectedImage || touchStartRef.current === null) return;
-      const delta = touchStartRef.current - (event.changedTouches[0]?.clientY ?? touchStartRef.current);
-      touchStartRef.current = null;
-      if (Math.abs(delta) > 35) advance(delta > 0 ? 1 : -1);
-    };
-    window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('keydown', onKey);
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
-      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [ready, goTo, replay, selectedImage]);
+  }, [ready, goTo, replay, selectedImage, currentState]);
 
   const unavailable = (name: string) => {
     setNotice(`${name} is not part of this design preview.`);
@@ -249,6 +251,7 @@ function App() {
   };
 
   return (
+    <div className="journey" ref={journeyRef}>
     <main className={`experience ${ready ? 'is-ready' : ''}`} aria-label="Explore parallax journey">
       <div className="scene-stage" ref={sceneRef}>
         {layers.map((layer) => {
@@ -284,9 +287,9 @@ function App() {
       </section>
 
       {ready && currentState === 3 && <button type="button" className="replay-button" onClick={replay}>Replay <span aria-hidden="true">↺</span></button>}
-      {ready && currentState > 0 && currentState < 3 && <button type="button" className="back-button" onClick={() => goTo(Math.max(0, destinationRef.current - 1))} aria-label="Previous scene">←</button>}
-      {ready && reducedRef.current && currentState === 0 && <button type="button" className="continue-button" onClick={() => goTo(1)}>Continue</button>}
-      {ready && reducedRef.current && currentState === 2 && <button type="button" className="continue-button continue-gallery" onClick={() => goTo(3)}>View gallery</button>}
+      {ready && currentState > 0 && currentState < 3 && <button type="button" className="back-button" onClick={() => goTo(currentState - 1)} aria-label="Previous scene">←</button>}
+      {ready && reducedMotion && currentState === 0 && <button type="button" className="continue-button" onClick={() => goTo(1)}>Continue</button>}
+      {ready && reducedMotion && currentState === 2 && <button type="button" className="continue-button continue-gallery" onClick={() => goTo(3)}>View gallery</button>}
       <div className="sr-only" role="status" aria-live="polite">{notice || (ready ? `Scene ${currentState + 1} of 4` : 'Loading scene')}</div>
       {notice && <div className="notice" role="status">{notice}</div>}
       {!ready && <div className="loading" role="status">Loading the journey…</div>}
@@ -297,6 +300,7 @@ function App() {
         </div>
       )}
     </main>
+    </div>
   );
 }
 

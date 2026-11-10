@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "validate": "node scripts/validate.cjs",
-    "audit:perf": "node scripts/audit-performance.cjs"
+    "audit:perf": "node scripts/audit-performance.cjs",
+    "audit:scroll": "node scripts/audit-scroll.cjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

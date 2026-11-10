@@ -27,8 +27,12 @@ const { chromium } = require('playwright');
       if (index === 0) largestInitialResources = resources.slice(0, 5);
       runs.push({ readyMs, initialBytes: resources.reduce((sum, item) => sum + item.bytes, 0) });
       if (index === 0) {
-        for (let scene = 2; scene <= 4; scene += 1) {
-          await page.keyboard.press('ArrowDown');
+        for (const [scene, time] of [[2, 3.5], [3, 6], [4, 9.5]]) {
+          await page.evaluate((value) => {
+            const distance = document.querySelector('.journey').offsetHeight - innerHeight;
+            scrollTo(0, distance * (value - 1.75) / (9.5 - 1.75));
+            dispatchEvent(new Event('scroll'));
+          }, time);
           await page.getByText(`Scene ${scene} of 4`).waitFor();
           await page.waitForTimeout(300);
         }
