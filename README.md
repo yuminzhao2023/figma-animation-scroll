@@ -25,7 +25,9 @@ At 1280 × 832, the scene follows the design coordinates. At 1440, 768, and phon
 
 ## Assets and validation
 
-Layer assets are stored in [`public/assets`](public/assets), including transparent PNGs and the original JPEG photo sources. The SVG title and mouse icon are independent assets. Inter and Lexend are packaged locally through `@fontsource`, so the rendered site has no temporary Figma asset or web font URL dependency.
+Layer assets are stored in [`public/assets`](public/assets) as WebP images with preserved transparency. Gallery cards use smaller WebP thumbnails; full-size photos load when opened. The SVG title and mouse icon are independent assets. Inter and Lexend are packaged locally through `@fontsource`, so the rendered site has no temporary Figma asset or web font URL dependency.
+
+The original PNG/JPEG files are available in Git history. The production build does not include them. To measure a cold browser load, run `npm run build && npm run audit:perf`; the audit starts a local preview server, repeats the initial load three times, and checks gallery thumbnails and the full-size viewer.
 
 To repeat the browser check, first run the dev server, then:
 

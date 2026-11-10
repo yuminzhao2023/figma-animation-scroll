@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "validate": "node scripts/validate.cjs"
+    "validate": "node scripts/validate.cjs",
+    "audit:perf": "node scripts/audit-performance.cjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { endpoints, interpolate, layers, mix, sceneSegment } from './scene';
 
 const galleryImages = [
-  { src: '/assets/imgPhoto1.jpg', label: 'Two hikers in a misty mountain pass', className: 'main left' },
-  { src: '/assets/imgPhoto.jpg', label: 'Hiker facing snowy peaks', className: 'main right' },
-  { src: '/assets/imgPhoto2.jpg', label: 'Mountain valley under cloud', className: 'side left' },
-  { src: '/assets/imgPhoto2.jpg', label: 'Mountain valley beneath the clouds', className: 'side right' },
+  { src: '/assets/imgPhoto1.webp', thumb: '/assets/imgPhoto1-thumb.webp', label: 'Two hikers in a misty mountain pass', className: 'main left' },
+  { src: '/assets/imgPhoto.webp', thumb: '/assets/imgPhoto-thumb.webp', label: 'Hiker facing snowy peaks', className: 'main right' },
+  { src: '/assets/imgPhoto2.webp', thumb: '/assets/imgPhoto2-thumb.webp', label: 'Mountain valley under cloud', className: 'side left' },
+  { src: '/assets/imgPhoto2.webp', thumb: '/assets/imgPhoto2-thumb.webp', label: 'Mountain valley beneath the clouds', className: 'side right' },
 ];
 
 function bezier(t: number, x1: number, y1: number, x2: number, y2: number) {
@@ -37,6 +37,7 @@ function App() {
   const lastInputRef = useRef(0);
   const touchStartRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
+  const [galleryReady, setGalleryReady] = useState(false);
   const [currentState, setCurrentState] = useState(0);
   const [notice, setNotice] = useState('');
   const [selectedImage, setSelectedImage] = useState<(typeof galleryImages)[number] | null>(null);
@@ -98,6 +99,7 @@ function App() {
   const goTo = useCallback((index: number, autoNext = false) => {
     if (!readyRef.current) return;
     const next = Math.max(0, Math.min(3, index));
+    if (next >= 1) setGalleryReady(true);
     window.cancelAnimationFrame(frameRef.current);
     window.clearTimeout(timerRef.current);
     destinationRef.current = next;
@@ -159,9 +161,9 @@ function App() {
     window.addEventListener('resize', updateScale);
 
     const keyAssets = [
-      '/assets/imgBgSky.jpg', '/assets/imgMountains.png', '/assets/imgClouds01.png',
-      '/assets/imgClouds03.png', '/assets/imgClouds05.png', '/assets/imgClouds11.png',
-      '/assets/imgExplore.svg', '/assets/imgCave.png', '/assets/imgExplorer.png',
+      '/assets/imgBgSky.webp', '/assets/imgMountains.webp', '/assets/imgClouds01.webp',
+      '/assets/imgClouds03.webp', '/assets/imgClouds05.webp', '/assets/imgClouds11.webp',
+      '/assets/imgExplore.svg', '/assets/imgCave.webp', '/assets/imgExplorer.webp',
     ];
     let cancelled = false;
     Promise.all(keyAssets.map((src) => new Promise<void>((resolve) => {
@@ -275,7 +277,7 @@ function App() {
           </div>
           {galleryImages.map((image, index) => (
             <button type="button" key={index} className={`gallery-card ${image.className}`} aria-label={`View photo: ${image.label}`} onClick={() => setSelectedImage(image)}>
-              <img src={image.src} alt={image.label} draggable="false" />
+              {galleryReady && <img src={image.thumb} alt={image.label} draggable="false" decoding="async" />}
             </button>
           ))}
         </div>

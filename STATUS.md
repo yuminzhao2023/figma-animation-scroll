@@ -5,13 +5,14 @@ Implementation complete. Local preview: <http://localhost:5173/> after `npm run 
 ## Deliverables
 
 - Source: `src/App.tsx`, `src/scene.ts`, `src/styles.css`, Vite and TypeScript config, `package-lock.json`
-- Original local assets: `public/assets/`
+- Optimized local assets: `public/assets/` (WebP and SVG)
 - Browser check: `scripts/validate.cjs`
 - Captures: `screenshots/state-{1,2,3,4}-1280.png`, `screenshots/state-4-{1440,768,390}.png`, `screenshots/transition-*-mid.png`
 
 ## Checks
 
 - `npm run build` — passed.
+- `npm run audit:perf` — passed. Cold initial transfer fell from 20.09 MB to 1.67 MB; local headless Chromium median ready time fell from 828 ms to 668 ms. Gallery thumbnails and the full-size viewer decoded successfully.
 - Chromium at 1280 × 832, 1440 × 900, 768 × 1024, and 390 × 844 — all four 1280 states and final responsive states rendered; image failures: 0; page errors: 0; document overflow: 0.
 - Reverse to scene 3, replay to scene 1, resize while on gallery, phone touch advance, and phone card viewer — passed.
 - Original Figma prototype playback was not available. Prototype reactions were read through Figma Plugin API; scene 2's key code list is empty. The website's wheel, touch, and keyboard mapping is documented in README.
