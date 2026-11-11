@@ -23,8 +23,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   isolation: isolate;
   overflow: hidden;
 }
-.center-ripple::before,
-.center-ripple::after {
+.center-ripple::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -33,30 +32,15 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   aspect-ratio: 1;
   border-radius: 50%;
   pointer-events: none;
-}
-.center-ripple::before {
   background: var(--ripple-fill);
   transform: translate(-50%, -50%) scale(0);
-}
-.center-ripple::after {
-  width: 85%;
-  border: 1px solid var(--ripple-ring);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.1);
+  transition: transform .55s cubic-bezier(.2, .7, .2, 1);
 }
 .center-ripple:is(:hover, :focus-visible)::before {
   transform: translate(-50%, -50%) scale(1);
-  transition: transform .55s cubic-bezier(.2, .7, .2, 1);
 }
-.center-ripple:is(:hover, :focus-visible)::after { animation: center-ripple-ring .65s ease-out both; }
 .center-ripple > * { position: relative; z-index: 1; }
-
-@keyframes center-ripple-ring {
-  15% { opacity: .65; }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .center-ripple::before { transition-duration: .01ms; }
-  .center-ripple:is(:hover, :focus-visible)::after { animation: none; }
 }
