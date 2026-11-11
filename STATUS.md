@@ -2,6 +2,12 @@
 
 Implementation complete. Local preview: <http://localhost:5173/> after `npm run dev`.
 
+## Centered button ripple — 2026-11-11
+
+- Replaced the instant hover fill on gallery arrows, the closing Back To Top link, and footer share icons with a center-expanding fill and a brief ripple ring. Keyboard focus gets the same effect; reduced-motion settings skip the animated ring.
+- `npm run build` passed. A 390 px browser check confirmed the fill grows from its center on the closing link, reaches its final state on the share icon, and produces no page errors.
+- On pointer exit, the fill, ring, and highlight colors now clear immediately instead of shrinking or fading out.
+
 ## Static mobile journey and performance — 2026-11-11
 
 - Screens up to 800 px now load a separate static hero with the EXPLORE title, a native horizontal photo gallery, and the destination content. Mobile no longer initializes the desktop parallax layers, white-curve controller, or scroll-frame animation. The full-size viewer still opens every original photo, and mobile navigation uses native anchors.

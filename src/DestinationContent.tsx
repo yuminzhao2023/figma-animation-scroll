@@ -193,7 +193,7 @@ function DestinationContent({ onNavigate }: { onNavigate?: (event: MouseEvent<HT
         <section className="destination-final" aria-labelledby="final-title">
           <p className="destination-eyebrow">YOUR NEXT CHAPTER STARTS OUTSIDE</p>
           <h2 id="final-title">Where will the<br />trail take you?</h2>
-          <a href="#top" onClick={onNavigate}>Back To Top <span aria-hidden="true">↑</span></a>
+          <a className="center-ripple" href="#top" onClick={onNavigate}><span className="destination-button-content">Back To Top <span aria-hidden="true">↑</span></span></a>
         </section>
       </main>
 
@@ -209,15 +209,15 @@ function DestinationContent({ onNavigate }: { onNavigate?: (event: MouseEvent<HT
             <p className="destination-share-text">Know who you would bring? Send them the view.</p>
             <div className="destination-share-actions">
               <button type="button" className="destination-share-action" onClick={sharePage} aria-label="Share Aster Ridge">
-                <span className="destination-share-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V3m0 0L8 7m4-4 4 4M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg></span>
+                <span className="destination-share-icon center-ripple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V3m0 0L8 7m4-4 4 4M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg></span>
                 <span>Share</span>
               </button>
               <button type="button" className="destination-share-action" onClick={copyLink} aria-label="Copy link to Aster Ridge">
-                <span className="destination-share-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9.5 14.5 5-5M8 17H7a4 4 0 0 1 0-8h3m4-2h3a4 4 0 0 1 0 8h-3" /></svg></span>
+                <span className="destination-share-icon center-ripple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9.5 14.5 5-5M8 17H7a4 4 0 0 1 0-8h3m4-2h3a4 4 0 0 1 0 8h-3" /></svg></span>
                 <span>Copy link</span>
               </button>
               <a className="destination-share-action" href={emailHref} aria-label="Email Aster Ridge link">
-                <span className="destination-share-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg></span>
+                <span className="destination-share-icon center-ripple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg></span>
                 <span>Email</span>
               </a>
             </div>

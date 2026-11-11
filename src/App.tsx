@@ -726,8 +726,8 @@ function App() {
               <span className="gallery-count">0{activeImage + 1} <span>/</span> 0{galleryImages.length}</span>
               <span className="gallery-scroll-hint">Scroll to explore <span aria-hidden="true">↓</span></span>
               <div className="gallery-arrows">
-                <button type="button" onClick={() => selectImage(activeImage - 1)} aria-label="Previous photo">←</button>
-                <button type="button" onClick={() => selectImage(activeImage + 1)} aria-label="Next photo">→</button>
+                <button type="button" className="center-ripple" onClick={() => selectImage(activeImage - 1)} aria-label="Previous photo"><span aria-hidden="true">←</span></button>
+                <button type="button" className="center-ripple" onClick={() => selectImage(activeImage + 1)} aria-label="Next photo"><span aria-hidden="true">→</span></button>
               </div>
             </div>
           </div>
