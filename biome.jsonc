@@ -1,0 +1,11 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
+  "linter": {
+    "rules": {
+      "a11y": {
+        // These are real hash links. Their click handlers update the URL and animate the scroll.
+        "useValidAnchor": "off"
+      }
+    }
+  }
+}

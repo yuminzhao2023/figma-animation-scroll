@@ -29,7 +29,7 @@ const { chromium } = require('playwright');
       if (index === 0) {
         for (const [scene, time] of [[2, 3.5], [3, 6], [4, 9.5]]) {
           await page.evaluate((value) => {
-            const distance = document.querySelector('.journey').offsetHeight - innerHeight;
+            const distance = document.querySelector('.journey').offsetHeight - innerHeight - (innerWidth > 800 ? innerHeight : 0);
             scrollTo(0, distance * (value - 1.75) / (9.5 - 1.75));
             dispatchEvent(new Event('scroll'));
           }, time);
