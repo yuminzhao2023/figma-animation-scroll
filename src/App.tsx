@@ -56,10 +56,6 @@ function App() {
   const scrollRangeRef = useRef(1);
   const galleryHoldRangeRef = useRef(0);
   const revealRangeRef = useRef(0);
-  const galleryArrivalRef = useRef<'armed' | 'preview' | 'returning' | 'released'>('armed');
-  const galleryArrivalIntentRef = useRef(false);
-  const galleryArrivalTimerRef = useRef<number | undefined>(undefined);
-  const returningGalleryWheelRef = useRef<(event: WheelEvent) => void>(() => {});
   const revealSnappingRef = useRef(false);
   const navigationTargetRef = useRef<HTMLElement | null>(null);
   const navigationTimeoutRef = useRef<number | undefined>(undefined);
@@ -378,11 +374,6 @@ function App() {
     event.preventDefault();
     const top = window.scrollY + target.getBoundingClientRect().top;
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-    if (top > scrollRangeRef.current + galleryHoldRangeRef.current + 1) {
-      galleryArrivalRef.current = 'released';
-      window.clearTimeout(galleryArrivalTimerRef.current);
-      window.removeEventListener('wheel', returningGalleryWheelRef.current);
-    }
     window.cancelAnimationFrame(backToTopFrameRef.current);
     backToTopFrameRef.current = 0;
     window.clearTimeout(navigationTimeoutRef.current);
@@ -455,83 +446,17 @@ function App() {
     const onMotionChange = () => {
       reducedRef.current = media.matches;
       setReducedMotion(media.matches);
-      if (media.matches) {
-        galleryArrivalRef.current = 'released';
-        window.clearTimeout(galleryArrivalTimerRef.current);
-        window.removeEventListener('wheel', returningGalleryWheelRef.current);
-        revealSnappingRef.current = false;
-      }
+      if (media.matches) revealSnappingRef.current = false;
       syncScroll();
     };
     media.addEventListener('change', onMotionChange);
-    const onReturningGalleryWheel = (event: WheelEvent) => {
-      if (galleryArrivalRef.current === 'returning') event.preventDefault();
-    };
-    returningGalleryWheelRef.current = onReturningGalleryWheel;
-    const startFirstRevealReturn = () => {
-      if (galleryArrivalRef.current !== 'preview') return;
-      const revealStart = scrollRangeRef.current + galleryHoldRangeRef.current;
-      if (window.scrollY <= revealStart + 1) {
-        galleryArrivalRef.current = 'released';
-        return;
-      }
-      galleryArrivalRef.current = 'returning';
-      revealSnappingRef.current = true;
-      window.addEventListener('wheel', onReturningGalleryWheel, { passive: false });
-      window.scrollTo({ top: revealStart, behavior: 'smooth' });
-    };
-    const scheduleFirstRevealReturn = () => {
-      window.clearTimeout(galleryArrivalTimerRef.current);
-      galleryArrivalTimerRef.current = window.setTimeout(startFirstRevealReturn, 260);
-    };
-    const onGalleryArrivalWheel = (event: WheelEvent) => {
-      if (window.innerWidth <= 800 || reducedRef.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      if (galleryArrivalRef.current === 'armed' && event.deltaY > 0) {
-        galleryArrivalIntentRef.current = true;
-      } else if (galleryArrivalRef.current === 'preview') {
-        scheduleFirstRevealReturn();
-      }
-    };
-    const onGalleryArrivalKey = (event: KeyboardEvent) => {
-      if (window.innerWidth <= 800 || reducedRef.current || event.target instanceof HTMLElement && event.target.closest('button, a, summary, input, textarea, select')) return;
-      if (event.key !== 'PageDown' && event.key !== 'ArrowDown' && event.code !== 'Space') return;
-      if (galleryArrivalRef.current === 'returning') {
-        event.preventDefault();
-      } else if (galleryArrivalRef.current === 'preview') {
-        scheduleFirstRevealReturn();
-      } else if (galleryArrivalRef.current === 'armed') {
-        galleryArrivalIntentRef.current = true;
-      }
-    };
     const onScroll = () => {
       const position = window.scrollY;
       const previous = lastScrollYRef.current;
-      if (position <= 1) {
-        galleryArrivalRef.current = 'armed';
-        galleryArrivalIntentRef.current = false;
-        window.clearTimeout(galleryArrivalTimerRef.current);
-        window.removeEventListener('wheel', onReturningGalleryWheel);
-      }
       const revealStart = scrollRangeRef.current + galleryHoldRangeRef.current;
       const revealEnd = revealStart + revealRangeRef.current;
-      if (readyRef.current && !reducedRef.current && window.innerWidth > 800 && !navigationTargetRef.current && !revealSnappingRef.current) {
-        if (galleryArrivalRef.current === 'armed' && galleryArrivalIntentRef.current && previous <= revealStart + 1 && position > revealStart + 1) {
-          galleryArrivalRef.current = 'preview';
-          galleryArrivalIntentRef.current = false;
-        }
-        if (galleryArrivalRef.current === 'preview') {
-          scheduleFirstRevealReturn();
-          if (position > revealEnd) {
-            lastScrollYRef.current = revealEnd;
-            window.scrollTo({ top: revealEnd, behavior: 'instant' });
-            syncScroll();
-            return;
-          }
-        }
-      }
       lastScrollYRef.current = position;
       syncScroll();
-      if (galleryArrivalRef.current === 'preview' || galleryArrivalRef.current === 'returning') return;
       if (!readyRef.current || reducedRef.current || revealSnappingRef.current || navigationTargetRef.current || revealRangeRef.current <= 0) return;
       const progress = (position - revealStart) / revealRangeRef.current;
       if (position > previous + 1 && progress >= .1 && progress < 1) {
@@ -544,25 +469,6 @@ function App() {
     };
     const onScrollEnd = () => {
       const revealStart = scrollRangeRef.current + galleryHoldRangeRef.current;
-      if (galleryArrivalRef.current === 'preview' && !navigationTargetRef.current) {
-        if (window.scrollY <= revealStart + 1) {
-          galleryArrivalRef.current = 'released';
-          window.clearTimeout(galleryArrivalTimerRef.current);
-        } else {
-          scheduleFirstRevealReturn();
-        }
-        syncScroll();
-        return;
-      }
-      if (galleryArrivalRef.current === 'returning' && !navigationTargetRef.current) {
-        if (Math.abs(window.scrollY - revealStart) < 3) {
-          galleryArrivalRef.current = 'released';
-          revealSnappingRef.current = false;
-          window.removeEventListener('wheel', onReturningGalleryWheel);
-          syncScroll();
-        }
-        return;
-      }
       const target = navigationTargetRef.current;
       if (target && Math.abs(target.getBoundingClientRect().top) > 64) {
         syncScroll();
@@ -592,17 +498,10 @@ function App() {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('scrollend', onScrollEnd);
-    window.addEventListener('wheel', onGalleryArrivalWheel, { passive: true });
-    window.addEventListener('keydown', onGalleryArrivalKey);
     window.addEventListener('wheel', cancelBackToTop, { passive: true });
     window.addEventListener('touchstart', cancelBackToTop, { passive: true });
     window.addEventListener('keydown', cancelBackToTop);
     const updateScale = () => {
-      if (window.innerWidth <= 800) {
-        galleryArrivalRef.current = 'released';
-        window.clearTimeout(galleryArrivalTimerRef.current);
-        window.removeEventListener('wheel', onReturningGalleryWheel);
-      }
       const scale = Math.max(window.innerWidth / 1280, window.innerHeight / 832);
       document.documentElement.style.setProperty('--scene-scale', `${scale}`);
       revealRangeRef.current = window.innerWidth > 800 ? window.innerHeight : 0;
@@ -649,10 +548,6 @@ function App() {
       window.removeEventListener('resize', updateScale);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('scrollend', onScrollEnd);
-      window.removeEventListener('wheel', onGalleryArrivalWheel);
-      window.removeEventListener('wheel', onReturningGalleryWheel);
-      window.removeEventListener('keydown', onGalleryArrivalKey);
-      window.clearTimeout(galleryArrivalTimerRef.current);
       window.removeEventListener('wheel', cancelBackToTop);
       window.removeEventListener('touchstart', cancelBackToTop);
       window.removeEventListener('keydown', cancelBackToTop);

@@ -2,6 +2,11 @@
 
 Implementation complete. Local preview: <http://localhost:5173/> after `npm run dev`.
 
+## First white reveal follows the normal threshold — 2026-11-18
+
+- Removed the first-gesture preview state, delayed forced return, and input interception. The first downward gesture now completes the white reveal after the same 10% threshold used by later gestures; smaller gestures still return to the gallery. Returning to the top does not restore a forced preview.
+- Updated the arrival regression and README. `npm run build` and `npm run lint` passed (25 existing CSS warnings and 3 import-style infos). The focused arrival check passed in installed Chrome via Playwright: first completion, completion after a top reset, small-gesture return, subsequent completion, reverse to gallery, and section navigation; page errors: 0. The default Playwright Chromium binary is absent locally, so validation used Chrome instead.
+
 ## Immediate ripple exit — 2026-11-18
 
 - Limited the ripple transform transition to hover and keyboard focus, including the footer share action's label area. Pointer exit now clears the fill and highlight immediately while entry keeps its center-expanding animation.

@@ -67,38 +67,36 @@ async function inspectGalleryArrival(browser, errors) {
     await page.goto(base, { waitUntil: 'networkidle' });
     await page.locator('.experience.is-ready').waitFor();
     const revealStart = await page.evaluate(() => document.querySelector('.journey').offsetHeight - 2 * innerHeight);
-    await page.evaluate(() => {
-      window.firstRevealMax = 0;
-      window.addEventListener('scroll', () => { window.firstRevealMax = Math.max(window.firstRevealMax, scrollY); }, { passive: true });
-    });
-    await page.mouse.wheel(0, revealStart + 600);
-    await page.mouse.wheel(0, 300);
-    await page.waitForFunction(expected => window.firstRevealMax > expected + innerHeight * .2, revealStart, { timeout: 3000 });
-    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
-    const firstReturn = await page.evaluate(() => ({
-      scrollY, whiteTop: document.querySelector('.destination-reveal').getBoundingClientRect().top,
-      promptTop: document.querySelector('.gallery-scroll-hint').getBoundingClientRect().top,
-      arrowBottom: document.querySelector('.gallery-arrows button').getBoundingClientRect().bottom,
-      navTop: document.querySelector('.navigation').getBoundingClientRect().top,
-      maxY: window.firstRevealMax,
-    }));
-    if (firstReturn.maxY < revealStart + 166 || firstReturn.whiteTop < 830 || firstReturn.promptTop >= 832 || firstReturn.arrowBottom > 832 || firstReturn.navTop < -2) {
-      throw new Error(`First white-curve preview did not rise and return to the full gallery: ${JSON.stringify(firstReturn)}`);
+    const revealEnd = revealStart + 832;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.mouse.wheel(0, revealStart + 250);
+      await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd, { timeout: 5000 });
+      await page.waitForTimeout(600);
+      const completed = await page.evaluate(() => ({
+        scrollY, whiteTop: document.querySelector('.destination-reveal').getBoundingClientRect().top,
+      }));
+      if (Math.abs(completed.scrollY - revealEnd) >= 3 || Math.abs(completed.whiteTop) >= 3) {
+        throw new Error(`First white-curve gesture did not stay expanded on attempt ${attempt + 1}: ${JSON.stringify(completed)}`);
+      }
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.waitForFunction(() => scrollY < 2);
     }
-    await page.waitForTimeout(160);
-    await page.mouse.wheel(0, 400);
-    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart + 832, { timeout: 5000 });
-    await page.evaluate(() => scrollTo(0, 0));
-    await page.waitForFunction(() => scrollY < 2);
-    await page.evaluate(() => { window.firstRevealMax = 0; });
+    await page.evaluate(() => {
+      window.smallRevealMax = 0;
+      window.addEventListener('scroll', () => { window.smallRevealMax = Math.max(window.smallRevealMax, scrollY); }, { passive: true });
+    });
     await page.mouse.wheel(0, revealStart + 40);
-    await page.waitForFunction(expected => window.firstRevealMax > expected + 20, revealStart, { timeout: 3000 });
+    await page.waitForFunction(expected => window.smallRevealMax > expected + 20, revealStart, { timeout: 3000 });
     await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
-    const smallPreviewMax = await page.evaluate(() => window.firstRevealMax);
-    if (smallPreviewMax >= revealStart + 832 * .1) throw new Error(`Small first preview crossed the completion threshold: ${smallPreviewMax}`);
+    const smallPreviewMax = await page.evaluate(() => window.smallRevealMax);
+    if (smallPreviewMax >= revealStart + 832 * .1) throw new Error(`Small preview crossed the completion threshold: ${smallPreviewMax}`);
+    await page.mouse.wheel(0, 250);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd, { timeout: 5000 });
+    await page.mouse.wheel(0, -100);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
     await page.locator('.navigation a[href="#experiences"]').click();
     await page.waitForFunction(() => Math.abs(document.getElementById('experiences').getBoundingClientRect().top) < 2, null, { timeout: 7000 });
-    console.log(JSON.stringify({ firstPreviewMax: Math.round(firstReturn.maxY), smallPreviewMax: Math.round(smallPreviewMax), returnedTo: Math.round(firstReturn.scrollY), whiteTop: Math.round(firstReturn.whiteTop), nextGestureRevealed: true, topReset: true, navigationFromGallery: true, errors }));
+    console.log(JSON.stringify({ firstGestureRevealed: true, expandedAfterTopReset: true, smallPreviewMax: Math.round(smallPreviewMax), nextGestureRevealed: true, reverseToGallery: true, navigationFromGallery: true, errors }));
   } finally {
     await context.close();
   }
