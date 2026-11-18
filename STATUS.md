@@ -2,6 +2,18 @@
 
 Implementation complete. Local preview: <http://localhost:5173/> after `npm run dev`.
 
+## Fast white reveal scroll stability — 2026-11-18
+
+- Reproduced a 72 px reverse jump on each of eight rapid wheel inputs in both directions. The old surface combined native page movement with a counteracting transform applied on a later frame.
+- Moved the white surface into a sticky track so its reveal position uses one transform while native scrolling stays anchored. The track passes pointer events through to the gallery. Automatic completion also preserves native progress instead of pulling back after a fast scroll passes its target. The 40% movement ratio and both 10% thresholds remain.
+- Added frame-by-frame rapid-scroll checks to the default validation and the focused arrival phase: eight 120 px wheel inputs and four 900 px inputs, in both directions. All four cases reported zero reverse steps after the fix. Full desktop validation, destination checks at 1280/390/768 px, build, and lint passed in installed Chrome; page errors: 0. Existing lint output remains 25 CSS warnings and 3 import-style infos.
+
+## Bidirectional white reveal resistance — 2026-11-18
+
+- Extended the desktop reveal to 2.5 viewport heights of native scroll travel and compensated the content position so the white edge moves at 40% of scrolling speed in both directions. Full coverage restores normal scrolling. The scene's 3.6-viewport travel and 0.35-viewport gallery hold remain the same.
+- Kept the 10% completion threshold in both directions, with a slower eased completion (about one second for most of the transition). Small downward gestures return to the gallery; small upward gestures settle back to full coverage. New scrolling can interrupt the completion. Section navigation accounts for the reveal offset; reduced motion keeps the original layout and mobile stays static.
+- `npm run build`, `npm run lint`, full desktop validation, and destination validation at 1280, 390, and 768 px passed using installed Chrome. The focused regression measured 100 px of scroll / 40 px of edge movement in both directions and 100 px / 100 px after full coverage. First reveal, top reset, thresholds, reverse, navigation, Back To Top, gallery, and image checks passed with no page errors. Additional checks passed for a one-pixel reversal during automatic completion, PageDown/PageUp, and switching reduced motion at runtime. Lint retains 25 existing CSS warnings and 3 import-style infos.
+
 ## First white reveal follows the normal threshold — 2026-11-18
 
 - Removed the first-gesture preview state, delayed forced return, and input interception. The first downward gesture now completes the white reveal after the same 10% threshold used by later gestures; smaller gestures still return to the gallery. Returning to the top does not restore a forced preview.

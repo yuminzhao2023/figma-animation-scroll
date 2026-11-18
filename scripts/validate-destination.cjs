@@ -1,3 +1,4 @@
+const scrollMetrics = require('./scroll-metrics.cjs');
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -81,7 +82,7 @@ async function checkPage(browser, width, height) {
     }
 
     if (width === 1280) {
-      await page.evaluate(() => scrollTo(0, document.querySelector('.journey').offsetHeight - 2 * innerHeight));
+      await page.evaluate(({ revealStart }) => scrollTo(0, revealStart), await page.evaluate(scrollMetrics));
       await page.getByText('Scene 4 of 4').waitFor();
       await page.locator('.gallery-card.main.left').click();
       await page.locator('.lightbox img').evaluate((image) => image.decode());

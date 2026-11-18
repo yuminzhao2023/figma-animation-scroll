@@ -1,6 +1,8 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const scrollMetrics = require('./scroll-metrics.cjs');
+const inspectRapidReveal = require('./validate-reveal.cjs');
 
 const base = process.env.VALIDATE_BASE || 'http://127.0.0.1:5173/';
 const output = path.resolve(__dirname, '../screenshots');
@@ -34,15 +36,13 @@ async function assertSceneImagesReady(page) {
 }
 
 async function seek(page, time) {
-  await page.evaluate(({ value, start }) => {
-    const distance = document.querySelector('.journey').offsetHeight - innerHeight - (innerWidth > 800 ? innerHeight * 1.35 : 0);
-    scrollTo(0, distance * Math.max(0, value - start) / (9.5 - start));
+  const { sceneEnd } = await page.evaluate(scrollMetrics);
+  const top = sceneEnd * Math.max(0, time - openingTime) / (9.5 - openingTime);
+  await page.evaluate(value => {
+    scrollTo(0, value);
     dispatchEvent(new Event('scroll'));
-  }, { value: time, start: openingTime });
-  await page.waitForFunction(({ value, start }) => {
-    const distance = document.querySelector('.journey').offsetHeight - innerHeight - (innerWidth > 800 ? innerHeight * 1.35 : 0);
-    return Math.abs(scrollY - distance * Math.max(0, value - start) / (9.5 - start)) < 2;
-  }, { value: time, start: openingTime });
+  }, top);
+  await page.waitForFunction(value => Math.abs(scrollY - value) < 2, top);
 }
 
 async function inspectLightboxImage(page) {
@@ -59,6 +59,20 @@ async function inspectLightboxImage(page) {
   return bounds;
 }
 
+async function measureRevealMotion(page, delta) {
+  await page.waitForTimeout(150);
+  return page.evaluate(async amount => {
+    const destination = document.querySelector('.destination-surface');
+    const before = { scrollY, top: destination.getBoundingClientRect().top };
+    scrollBy(0, amount);
+    dispatchEvent(new Event('scroll'));
+    await new Promise(requestAnimationFrame);
+    const scrollDistance = scrollY - before.scrollY;
+    const visualDistance = before.top - destination.getBoundingClientRect().top;
+    return { scrollDistance, visualDistance, ratio: visualDistance / scrollDistance };
+  }, delta);
+}
+
 async function inspectGalleryArrival(browser, errors) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 832 } });
   const page = await context.newPage();
@@ -66,14 +80,13 @@ async function inspectGalleryArrival(browser, errors) {
   try {
     await page.goto(base, { waitUntil: 'networkidle' });
     await page.locator('.experience.is-ready').waitFor();
-    const revealStart = await page.evaluate(() => document.querySelector('.journey').offsetHeight - 2 * innerHeight);
-    const revealEnd = revealStart + 832;
+    const { revealStart, revealEnd, revealDistance } = await page.evaluate(scrollMetrics);
     for (let attempt = 0; attempt < 2; attempt++) {
       await page.mouse.wheel(0, revealStart + 250);
       await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd, { timeout: 5000 });
       await page.waitForTimeout(600);
       const completed = await page.evaluate(() => ({
-        scrollY, whiteTop: document.querySelector('.destination-reveal').getBoundingClientRect().top,
+        scrollY, whiteTop: document.querySelector('.destination-surface').getBoundingClientRect().top,
       }));
       if (Math.abs(completed.scrollY - revealEnd) >= 3 || Math.abs(completed.whiteTop) >= 3) {
         throw new Error(`First white-curve gesture did not stay expanded on attempt ${attempt + 1}: ${JSON.stringify(completed)}`);
@@ -81,6 +94,14 @@ async function inspectGalleryArrival(browser, errors) {
       await page.evaluate(() => scrollTo(0, 0));
       await page.waitForFunction(() => scrollY < 2);
     }
+    await page.evaluate(value => scrollTo(0, value), revealStart);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart);
+    const downwardResistance = await measureRevealMotion(page, 100);
+    if (Math.abs(downwardResistance.ratio - .4) > .03) throw new Error(`Missing downward reveal resistance: ${JSON.stringify(downwardResistance)}`);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForFunction(() => scrollY < 2);
     await page.evaluate(() => {
       window.smallRevealMax = 0;
       window.addEventListener('scroll', () => { window.smallRevealMax = Math.max(window.smallRevealMax, scrollY); }, { passive: true });
@@ -89,14 +110,26 @@ async function inspectGalleryArrival(browser, errors) {
     await page.waitForFunction(expected => window.smallRevealMax > expected + 20, revealStart, { timeout: 3000 });
     await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
     const smallPreviewMax = await page.evaluate(() => window.smallRevealMax);
-    if (smallPreviewMax >= revealStart + 832 * .1) throw new Error(`Small preview crossed the completion threshold: ${smallPreviewMax}`);
+    if (smallPreviewMax >= revealStart + revealDistance * .1) throw new Error(`Small preview crossed the completion threshold: ${smallPreviewMax}`);
     await page.mouse.wheel(0, 250);
     await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd, { timeout: 5000 });
-    await page.mouse.wheel(0, -100);
+    const normalScroll = await measureRevealMotion(page, 100);
+    if (Math.abs(normalScroll.ratio - 1) > .03) throw new Error(`Page still resists after full reveal: ${JSON.stringify(normalScroll)}`);
+    await page.evaluate(value => scrollTo(0, value), revealEnd);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd);
+    const upwardResistance = await measureRevealMotion(page, -100);
+    if (Math.abs(upwardResistance.ratio - .4) > .03) throw new Error(`Missing upward reveal resistance: ${JSON.stringify(upwardResistance)}`);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealEnd, { timeout: 5000 });
+    await page.mouse.wheel(0, -250);
+    await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
+    await page.waitForTimeout(150);
+    await page.mouse.wheel(0, 250);
+    await page.waitForFunction(({ start, distance }) => scrollY > start + distance * .3 && scrollY < start + distance * .7, { start: revealStart, distance: revealDistance }, { timeout: 5000 });
+    await page.mouse.wheel(0, -1);
     await page.waitForFunction(expected => Math.abs(scrollY - expected) < 3, revealStart, { timeout: 5000 });
     await page.locator('.navigation a[href="#experiences"]').click();
     await page.waitForFunction(() => Math.abs(document.getElementById('experiences').getBoundingClientRect().top) < 2, null, { timeout: 7000 });
-    console.log(JSON.stringify({ firstGestureRevealed: true, expandedAfterTopReset: true, smallPreviewMax: Math.round(smallPreviewMax), nextGestureRevealed: true, reverseToGallery: true, navigationFromGallery: true, errors }));
+    console.log(JSON.stringify({ firstGestureRevealed: true, expandedAfterTopReset: true, downwardResistance, upwardResistance, normalScroll, smallPreviewMax: Math.round(smallPreviewMax), nextGestureRevealed: true, reverseToGallery: true, reverseDuringCompletion: true, navigationFromGallery: true, errors }));
   } finally {
     await context.close();
   }
@@ -108,10 +141,14 @@ async function inspectGalleryArrival(browser, errors) {
   try {
     if (process.env.VALIDATE_PHASE === 'arrival') {
       await inspectGalleryArrival(browser, errors);
+      await inspectRapidReveal(browser, errors);
       if (errors.length) throw new Error(`Page errors: ${errors.join('; ')}`);
       return;
     }
-    if (!process.env.VALIDATE_PHASE) await inspectGalleryArrival(browser, errors);
+    if (!process.env.VALIDATE_PHASE) {
+      await inspectGalleryArrival(browser, errors);
+      await inspectRapidReveal(browser, errors);
+    }
     if (process.env.VALIDATE_PHASE !== 'capture') {
     for (const width of process.env.VALIDATE_PHASE === 'short' ? [] : process.env.VALIDATE_WIDTH ? [Number(process.env.VALIDATE_WIDTH)] : [1280, 1440]) {
       if (width <= 800) throw new Error('Static mobile layouts are checked by npm run validate:site');
@@ -312,63 +349,50 @@ async function inspectGalleryArrival(browser, errors) {
     }
     await capturePage.getByRole('dialog').waitFor({ state: 'hidden' });
     console.log(JSON.stringify({ lightboxMotion: [Math.round(sourcePhotoBounds.width), Math.round(openingBounds.width), Math.round(expandedBounds.width), Math.round(closingBounds.width)] }));
-    const galleryHold = await capturePage.evaluate(() => {
-      const sceneEnd = document.querySelector('.journey').offsetHeight - innerHeight * 2.35;
-      const revealStart = document.querySelector('.journey').offsetHeight - innerHeight * 2;
+    const metrics = await capturePage.evaluate(scrollMetrics);
+    const galleryHold = await capturePage.evaluate(({ sceneEnd, revealStart }) => {
       scrollTo(0, sceneEnd + (revealStart - sceneEnd) * .75);
       dispatchEvent(new Event('scroll'));
       return { sceneEnd, revealStart };
-    });
+    }, metrics);
     await capturePage.waitForTimeout(120);
-    const holdTop = await capturePage.locator('.destination-reveal').evaluate(element => element.getBoundingClientRect().top);
+    const holdTop = await capturePage.locator('.destination-surface').evaluate(element => element.getBoundingClientRect().top);
     if (holdTop <= 832) throw new Error(`White reveal appeared during the gallery hold: ${holdTop}`);
-    await capturePage.evaluate(() => {
+    await capturePage.evaluate(({ revealStart, revealDistance }) => {
       window.partialRevealMax = 0;
-      const revealStart = document.querySelector('.journey').offsetHeight - 2 * innerHeight;
-      window.addEventListener('scroll', () => { window.partialRevealMax = Math.max(window.partialRevealMax, (scrollY - revealStart) / innerHeight); }, { passive: true });
-      scrollTo(0, revealStart + innerHeight * .06);
+      window.addEventListener('scroll', () => { window.partialRevealMax = Math.max(window.partialRevealMax, (scrollY - revealStart) / revealDistance); }, { passive: true });
+      scrollTo(0, revealStart + revealDistance * .06);
       dispatchEvent(new Event('scroll'));
-    });
-    await capturePage.waitForFunction(() => {
-      const revealStart = document.querySelector('.journey').offsetHeight - 2 * innerHeight;
-      return Math.abs(scrollY - revealStart) < 3;
-    }, null, { timeout: 5000 });
+    }, metrics);
+    await capturePage.waitForFunction(expected => Math.abs(scrollY - expected) < 3, metrics.revealStart, { timeout: 5000 });
     await capturePage.waitForTimeout(120);
     const returnedReveal = await capturePage.evaluate(() => ({
-      top: document.querySelector('.destination-reveal').getBoundingClientRect().top,
+      top: document.querySelector('.destination-surface').getBoundingClientRect().top,
       path: document.querySelector('.destination-wave path').getAttribute('d'),
       maxProgress: window.partialRevealMax,
     }));
     await capturePage.screenshot({ path: path.join(output, 'reveal-auto-return.png') });
     if (!(returnedReveal.maxProgress >= .05 && returnedReveal.top > 800)) throw new Error(`Small white reveal did not return after scrolling stopped: ${JSON.stringify(returnedReveal)}`);
-    await capturePage.evaluate(() => {
-      const distance = document.querySelector('.journey').offsetHeight - 2 * innerHeight;
-      scrollTo(0, distance + innerHeight * .12);
+    await capturePage.evaluate(({ revealStart, revealDistance }) => {
+      scrollTo(0, revealStart + revealDistance * .12);
       dispatchEvent(new Event('scroll'));
-    });
-    await capturePage.waitForFunction(() => {
-      const distance = document.querySelector('.journey').offsetHeight - innerHeight;
-      return Math.abs(scrollY - distance) < 3;
-    }, null, { timeout: 5000 });
+    }, metrics);
+    await capturePage.waitForFunction(expected => Math.abs(scrollY - expected) < 3, metrics.revealEnd, { timeout: 5000 });
     await capturePage.waitForTimeout(120);
     const completedReveal = await capturePage.evaluate(() => ({
-      top: document.querySelector('.destination-reveal').getBoundingClientRect().top,
+      top: document.querySelector('.destination-surface').getBoundingClientRect().top,
       path: document.querySelector('.destination-wave path').getAttribute('d'),
     }));
     await capturePage.screenshot({ path: path.join(output, 'reveal-auto-complete.png') });
     if (!(completedReveal.top < 3 && returnedReveal.path !== completedReveal.path)) throw new Error('Curved reveal did not auto-complete after threshold');
-    await capturePage.evaluate(() => {
-      const distance = document.querySelector('.journey').offsetHeight - 2 * innerHeight;
-      scrollTo(0, distance + innerHeight * .88);
+    await capturePage.evaluate(({ revealStart, revealDistance }) => {
+      scrollTo(0, revealStart + revealDistance * .88);
       dispatchEvent(new Event('scroll'));
-    });
-    await capturePage.waitForFunction(() => {
-      const distance = document.querySelector('.journey').offsetHeight - 2 * innerHeight;
-      return Math.abs(scrollY - distance) < 3;
-    }, null, { timeout: 5000 });
+    }, metrics);
+    await capturePage.waitForFunction(expected => Math.abs(scrollY - expected) < 3, metrics.revealStart, { timeout: 5000 });
     await capturePage.waitForTimeout(120);
     const retreatedReveal = await capturePage.evaluate(() => ({
-      top: document.querySelector('.destination-reveal').getBoundingClientRect().top,
+      top: document.querySelector('.destination-surface').getBoundingClientRect().top,
       path: document.querySelector('.destination-wave path').getAttribute('d'),
     }));
     await capturePage.screenshot({ path: path.join(output, 'reveal-auto-retreat.png') });

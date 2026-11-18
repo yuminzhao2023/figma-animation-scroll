@@ -1,5 +1,12 @@
-.journey { height: 595dvh; }
+.journey, .destination-reveal-track { --reveal-distance: 1; }
+.journey { height: calc(495dvh + 100dvh * var(--reveal-distance)); }
+@media (min-width: 801px) and (prefers-reduced-motion: no-preference) {
+  .journey, .destination-reveal-track { --reveal-distance: 2.5; }
+}
 .destination-reveal { position: relative; z-index: 3; margin-top: -100dvh; }
+.destination-reveal-track { margin-top: calc(-100dvh * (1 + var(--reveal-distance))); pointer-events: none; }
+.destination-reveal-track::after { content: ''; display: block; height: calc(100dvh * var(--reveal-distance)); }
+.destination-surface { position: sticky; top: 0; display: flow-root; pointer-events: auto; transform: translate3d(0,100dvh,0); }
 .destination-wave { position: absolute; z-index: 2; left: 0; top: -22dvh; display: block; width: 100%; height: 22dvh; pointer-events: none; }
 
 .experience {

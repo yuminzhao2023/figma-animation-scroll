@@ -51,6 +51,8 @@ function App() {
   const lightboxOpenAnimationRef = useRef<Animation | null>(null);
   const lightboxBackdropAnimationRef = useRef<Animation | null>(null);
   const lightboxClosingRef = useRef(false);
+  const destinationSurfaceRef = useRef<HTMLDivElement>(null);
+  const revealSnapFrameRef = useRef(0);
   const revealPathRef = useRef<SVGPathElement>(null);
   const elementsRef = useRef<RenderElements | null>(null);
   const scrollRangeRef = useRef(1);
@@ -311,6 +313,12 @@ function App() {
     setStyle(elements.carousel, 'transform', `translate3d(0,${650 * (1 - endProgress)}px,0)`);
     setStyle(elements.carousel, 'opacity', `${endProgress}`);
 
+    const destination = destinationSurfaceRef.current;
+    if (destination) {
+      // Sticky positioning isolates the surface from native scroll between render frames.
+      const offset = window.innerHeight * (1 - revealProgress);
+      setStyle(destination, 'transform', offset > 0 ? `translate3d(0,${offset}px,0)` : 'none');
+    }
     const path = revealPathRef.current;
     if (path) {
       const progress = reducedRef.current ? 0 : revealProgress;
@@ -372,7 +380,11 @@ function App() {
     const target = document.getElementById(hash.slice(1));
     if (!target) return;
     event.preventDefault();
-    const top = window.scrollY + target.getBoundingClientRect().top;
+    window.cancelAnimationFrame(revealSnapFrameRef.current);
+    revealSnapFrameRef.current = 0;
+    // Section positions must use their final layout, without reveal compensation.
+    const compensation = Math.max(0, revealRangeRef.current - window.innerHeight) * (1 - targetRevealRef.current);
+    const top = window.scrollY + target.getBoundingClientRect().top + (target.closest('.destination-reveal') ? compensation : 0);
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
     window.cancelAnimationFrame(backToTopFrameRef.current);
     backToTopFrameRef.current = 0;
@@ -443,11 +455,44 @@ function App() {
         flushFrame();
       }, 50);
     };
+    const stopRevealSnap = () => {
+      if (!revealSnapFrameRef.current) return;
+      window.cancelAnimationFrame(revealSnapFrameRef.current);
+      revealSnapFrameRef.current = 0;
+      revealSnappingRef.current = false;
+      lastScrollYRef.current = window.scrollY;
+    };
+    const snapReveal = (top: number) => {
+      stopRevealSnap();
+      const start = window.scrollY;
+      const distance = Math.abs(top - start);
+      if (distance < 1) return;
+      const duration = Math.max(450, 1200 * distance / revealRangeRef.current);
+      const started = performance.now();
+      revealSnappingRef.current = true;
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - started) / duration);
+        const eased = progress < .5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
+        const next = start + (top - start) * eased;
+        // Native input can advance between wheel callbacks; never pull it backward.
+        const position = top > start ? Math.max(window.scrollY, next) : Math.min(window.scrollY, next);
+        window.scrollTo({ top: position, behavior: 'instant' });
+        syncScroll();
+        const reachedTarget = top > start ? window.scrollY >= top : window.scrollY <= top;
+        if (progress < 1 && !reachedTarget) revealSnapFrameRef.current = window.requestAnimationFrame(step);
+        else {
+          revealSnapFrameRef.current = 0;
+          revealSnappingRef.current = false;
+          lastScrollYRef.current = window.scrollY;
+        }
+      };
+      revealSnapFrameRef.current = window.requestAnimationFrame(step);
+    };
     const onMotionChange = () => {
+      stopRevealSnap();
       reducedRef.current = media.matches;
       setReducedMotion(media.matches);
-      if (media.matches) revealSnappingRef.current = false;
-      syncScroll();
+      updateScale();
     };
     media.addEventListener('change', onMotionChange);
     const onScroll = () => {
@@ -459,15 +504,14 @@ function App() {
       syncScroll();
       if (!readyRef.current || reducedRef.current || revealSnappingRef.current || navigationTargetRef.current || revealRangeRef.current <= 0) return;
       const progress = (position - revealStart) / revealRangeRef.current;
-      if (position > previous + 1 && progress >= .1 && progress < 1) {
-        revealSnappingRef.current = true;
-        window.scrollTo({ top: revealEnd, behavior: 'smooth' });
-      } else if (position < previous - 1 && progress <= .9 && progress > 0) {
-        revealSnappingRef.current = true;
-        window.scrollTo({ top: revealStart, behavior: 'smooth' });
+      if (position > previous && progress >= .1 && progress < 1) {
+        snapReveal(revealEnd);
+      } else if (position < previous && progress <= .9 && progress > 0) {
+        snapReveal(revealStart);
       }
     };
     const onScrollEnd = () => {
+      if (revealSnapFrameRef.current) return;
       const revealStart = scrollRangeRef.current + galleryHoldRangeRef.current;
       const target = navigationTargetRef.current;
       if (target && Math.abs(target.getBoundingClientRect().top) > 64) {
@@ -483,12 +527,19 @@ function App() {
       }
       syncScroll();
       const revealProgress = revealRangeRef.current ? (window.scrollY - revealStart) / revealRangeRef.current : 0;
-      if (!target && !reducedRef.current && revealProgress > 0 && revealProgress < .1) {
-        revealSnappingRef.current = true;
-        window.scrollTo({ top: revealStart, behavior: 'smooth' });
+      if (!target && !reducedRef.current && revealProgress > 0 && revealProgress < 1) {
+        if (revealProgress < .1) snapReveal(revealStart);
+        else if (revealProgress > .9) snapReveal(revealStart + revealRangeRef.current);
       }
     };
-    const cancelBackToTop = () => {
+    const interruptScrollAnimation = (event: Event) => {
+      const interruptedReveal = !!revealSnapFrameRef.current;
+      stopRevealSnap();
+      if (interruptedReveal && event instanceof WheelEvent && event.deltaY !== 0 && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+        // Passive wheel events may arrive after native scrolling; preserve input direction.
+        lastScrollYRef.current = window.scrollY - Math.sign(event.deltaY);
+        onScroll();
+      }
       if (!backToTopFrameRef.current) return;
       window.cancelAnimationFrame(backToTopFrameRef.current);
       backToTopFrameRef.current = 0;
@@ -498,16 +549,19 @@ function App() {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('scrollend', onScrollEnd);
-    window.addEventListener('wheel', cancelBackToTop, { passive: true });
-    window.addEventListener('touchstart', cancelBackToTop, { passive: true });
-    window.addEventListener('keydown', cancelBackToTop);
+    window.addEventListener('wheel', interruptScrollAnimation, { passive: true });
+    window.addEventListener('touchstart', interruptScrollAnimation, { passive: true });
+    window.addEventListener('keydown', interruptScrollAnimation);
     const updateScale = () => {
+      stopRevealSnap();
       const scale = Math.max(window.innerWidth / 1280, window.innerHeight / 832);
       document.documentElement.style.setProperty('--scene-scale', `${scale}`);
-      revealRangeRef.current = window.innerWidth > 800 ? window.innerHeight : 0;
+      const revealDistance = Number(getComputedStyle(journeyRef.current as HTMLDivElement).getPropertyValue('--reveal-distance')) || 1;
+      revealRangeRef.current = window.innerWidth > 800 ? window.innerHeight * revealDistance : 0;
       galleryHoldRangeRef.current = window.innerWidth > 800 ? window.innerHeight * .35 : 0;
       scrollRangeRef.current = Math.max(1, (journeyRef.current?.offsetHeight ?? window.innerHeight) - window.innerHeight - revealRangeRef.current - galleryHoldRangeRef.current);
       renderCarousel(activeImageRef.current, false);
+      renderFrame(targetTimeRef.current, targetRevealRef.current);
       onScroll();
     };
     updateScale();
@@ -535,6 +589,7 @@ function App() {
     });
     return () => {
       cancelled = true;
+      stopRevealSnap();
       elementsRef.current = null;
       readyRef.current = false;
       hasRenderedRef.current = false;
@@ -548,9 +603,9 @@ function App() {
       window.removeEventListener('resize', updateScale);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('scrollend', onScrollEnd);
-      window.removeEventListener('wheel', cancelBackToTop);
-      window.removeEventListener('touchstart', cancelBackToTop);
-      window.removeEventListener('keydown', cancelBackToTop);
+      window.removeEventListener('wheel', interruptScrollAnimation);
+      window.removeEventListener('touchstart', interruptScrollAnimation);
+      window.removeEventListener('keydown', interruptScrollAnimation);
       media.removeEventListener('change', onMotionChange);
     };
   }, [renderCarousel, renderFrame, selectImage, syncScroll]);
@@ -647,11 +702,13 @@ function App() {
       )}
     </section>
     </div>
-    <div className="destination-reveal">
-      <svg className="destination-wave" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path ref={revealPathRef} fill="#f1efe8" d="M 0 100 V 100 C 25 100 25 100 50 100 C 75 100 75 100 100 100 V 100 Z" />
-      </svg>
-      <DestinationContent onNavigate={navigateToSection} />
+    <div className="destination-reveal destination-reveal-track">
+      <div className="destination-surface" ref={destinationSurfaceRef}>
+        <svg className="destination-wave" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path ref={revealPathRef} fill="#f1efe8" d="M 0 100 V 100 C 25 100 25 100 50 100 C 75 100 75 100 100 100 V 100 Z" />
+        </svg>
+        <DestinationContent onNavigate={navigateToSection} />
+      </div>
     </div>
     </>
   );
