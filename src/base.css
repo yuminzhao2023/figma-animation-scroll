@@ -34,13 +34,13 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   pointer-events: none;
   background: var(--ripple-fill);
   transform: translate(-50%, -50%) scale(0);
-  transition: transform .55s cubic-bezier(.2, .7, .2, 1);
 }
 .center-ripple:is(:hover, :focus-visible)::before {
   transform: translate(-50%, -50%) scale(1);
+  transition: transform .55s cubic-bezier(.2, .7, .2, 1);
 }
 .center-ripple > * { position: relative; z-index: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  .center-ripple::before { transition-duration: .01ms; }
+  .center-ripple:is(:hover, :focus-visible)::before { transition-duration: .01ms; }
 }

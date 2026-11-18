@@ -152,7 +152,7 @@
 .destination-share-icon { --ripple-fill: var(--ink); display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid #aeb8ae; border-radius: 50%; }
 .destination-share-icon svg { width: 22px; height: 22px; }
 .destination-share-action:is(:hover, :focus-visible) .destination-share-icon { border-color: var(--ink); color: white; transition: color .3s ease, border-color .3s ease; }
-.destination-share-action:is(:hover, :focus-visible) .destination-share-icon::before { transform: translate(-50%, -50%) scale(1); }
+.destination-share-action:is(:hover, :focus-visible) .destination-share-icon::before { transform: translate(-50%, -50%) scale(1); transition: transform .55s cubic-bezier(.2, .7, .2, 1); }
 .destination-share-status { min-height: 17px; margin-top: 17px; color: #9a593e; font-size: 11px; line-height: 1.5; }
 .destination-footer-base { display: grid; grid-template-columns: auto 1fr minmax(260px, 360px); align-items: center; gap: 45px; padding-top: 27px; border-top: 1px solid #cbd0c5; }
 .destination-footer-base > p { color: var(--muted); font-size: 11px; line-height: 1.55; }

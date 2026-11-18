@@ -2,6 +2,11 @@
 
 Implementation complete. Local preview: <http://localhost:5173/> after `npm run dev`.
 
+## Immediate ripple exit — 2026-11-18
+
+- Limited the ripple transform transition to hover and keyboard focus, including the footer share action's label area. Pointer exit now clears the fill and highlight immediately while entry keeps its center-expanding animation.
+- `npm run build` passed. Chrome checks covered the gallery arrow, Back To Top, share icon, and share label: exits at 90 ms and 650 ms reset the fill immediately with no remaining animations. Reduced-motion keyboard focus passed; page errors: 0.
+
 ## Centered button ripple — 2026-11-11
 
 - Replaced the instant hover fill on gallery arrows, the closing Back To Top link, and footer share icons with a center-expanding fill and a brief ripple ring. Keyboard focus gets the same effect; reduced-motion settings skip the animated ring.
