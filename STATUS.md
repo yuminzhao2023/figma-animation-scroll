@@ -2,6 +2,11 @@
 
 Implementation complete. Local preview: <http://localhost:5173/> after `npm run dev`.
 
+## Footer action label highlight — 2026-11-18
+
+- Added a shared accent text color for hover and keyboard focus on Share, Copy link, and Email, so each label responds together with its circular icon. The icon still turns white; pointer exit clears the highlight.
+- Build and lint passed (25 existing CSS warnings and 3 import-style infos). Chrome checks at 1280 and 390 px, plus desktop reduced motion, covered hovering both icons and labels, keyboard focus, and restoring the default state for all three actions. Page errors: 0.
+
 ## Fast white reveal scroll stability — 2026-11-18
 
 - Reproduced a 72 px reverse jump on each of eight rapid wheel inputs in both directions. The old surface combined native page movement with a counteracting transform applied on a later frame.
